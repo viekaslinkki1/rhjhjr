@@ -1,14 +1,14 @@
 <!doctype html>
 <html>
-<head><title>Coverup Lock</title></head>
+<head><title>Toggle Lock</title></head>
 <body>
-  <h2>Enter password to toggle site lock</h2>
+  <h2>Enter Password to Toggle Site Lock</h2>
   {% if error %}
     <p style="color:red;">{{ error }}</p>
   {% endif %}
   <form method="post">
-    <input type="password" name="password" placeholder="Password" autofocus required>
-    <button type="submit">Submit</button>
+    <input type="password" name="password" placeholder="Password" required autofocus>
+    <button type="submit">Toggle Lock</button>
   </form>
 </body>
 </html>
