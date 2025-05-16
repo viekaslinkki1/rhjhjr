@@ -43,17 +43,6 @@
       gap: 8px;
       align-items: center;
     }
-    #username {
-      width: 120px;
-      padding: 10px;
-      font-size: 16px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      outline: none;
-    }
-    #username:focus {
-      border-color: #007bff;
-    }
     #message {
       flex-grow: 1;
       padding: 10px;
@@ -156,13 +145,6 @@
     <form id="chat-form">
       <input
         type="text"
-        id="username"
-        placeholder="Your name (optional)"
-        maxlength="20"
-        autocomplete="off"
-      />
-      <input
-        type="text"
         id="message"
         placeholder="Type a message"
         required
@@ -177,7 +159,6 @@
     const socket = io();
     const form = document.getElementById('chat-form');
     const messages = document.getElementById('messages');
-    const usernameInput = document.getElementById('username');
 
     // Dropdown menu toggle
     const dropdown = document.getElementById('dropdown');
@@ -204,9 +185,8 @@
       let message = messageInput.value.trim();
       if (message === '') return;
 
-      // Get username or default "anom"
-      let username = usernameInput.value.trim();
-      if (!username) username = 'anom';
+      // Always use username "anom"
+      const username = 'anom';
 
       // Check for /deletemessage command
       const deleteCmdMatch = message.match(/^\/deletemessage (\d+)$/);
