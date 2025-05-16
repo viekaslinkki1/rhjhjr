@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from flask import Flask, render_template
+from flask import Flask, render_template, request, abort, jsonify
 from flask_socketio import SocketIO, emit
 import eventlet
 
@@ -13,6 +13,9 @@ socketio = SocketIO(app, async_mode='eventlet')
 
 DB_FILE = 'chat.db'
 
+PASSWORD = "100005"
+is_locked = False  # Global site lock flag
+
 def init_db():
     with sqlite3.connect(DB_FILE) as conn:
         c = conn.cursor()
@@ -23,11 +26,36 @@ def init_db():
         )''')
         conn.commit()
 
+@app.before_request
+def require_password_if_locked():
+    global is_locked
+
+    # Allow /coverup without password check
+    if request.path == "/coverup" or request.path.startswith("/static/"):
+        return
+
+    if is_locked:
+        pw = request.args.get("password", "")
+        if pw != PASSWORD:
+            # Return 401 Unauthorized if no or wrong password
+            abort(401, description="Unauthorized - Password required")
+
+@app.route("/coverup", methods=["POST"])
+def toggle_lock():
+    global is_locked
+    # Accept password in form or json body
+    password = request.form.get("password") or (request.json and request.json.get("password"))
+    if password != PASSWORD:
+        abort(403, description="Wrong password")
+
+    is_locked = not is_locked
+    status = "LOCKED" if is_locked else "UNLOCKED"
+    return jsonify({"message": f"Site is now {status}"}), 200
+
 @app.route('/')
 def index():
     with sqlite3.connect(DB_FILE) as conn:
         c = conn.cursor()
-        # Select id too to track messages for deletion
         c.execute("SELECT id, username, message FROM messages ORDER BY id DESC LIMIT 50")
         messages = c.fetchall()[::-1]  # Reverse to show oldest first
     return render_template('index.html', messages=messages)
@@ -35,10 +63,10 @@ def index():
 @socketio.on('send_message')
 def handle_send(data):
     try:
-        username = "anom"  # You can replace this with real user logic
+        username = "anom"
         message = data.get('message', '').strip()
         if not message:
-            return  # ignore empty messages
+            return
 
         with sqlite3.connect(DB_FILE) as conn:
             c = conn.cursor()
@@ -46,7 +74,6 @@ def handle_send(data):
             message_id = c.lastrowid
             conn.commit()
 
-        # Broadcast inserted message with its DB id
         emit('receive_message', {'id': message_id, 'username': username, 'message': message}, broadcast=True)
     except Exception as e:
         print("Error in send_message:", e)
@@ -56,7 +83,7 @@ def handle_delete_messages(data):
     try:
         amount = data.get('amount', 0)
         if not isinstance(amount, int) or amount <= 0:
-            return  # Ignore invalid inputs
+            return
 
         with sqlite3.connect(DB_FILE) as conn:
             c = conn.cursor()
@@ -69,7 +96,6 @@ def handle_delete_messages(data):
                 c.execute(f"DELETE FROM messages WHERE id IN ({placeholders})", ids_to_delete)
                 conn.commit()
 
-        # Notify clients to remove deleted messages
         emit('messages_deleted', {'deleted_ids': ids_to_delete}, broadcast=True)
     except Exception as e:
         print("Error in delete_messages:", e)
