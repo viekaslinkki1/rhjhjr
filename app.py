@@ -12,9 +12,23 @@ app.config['SECRET_KEY'] = 'secret'
 socketio = SocketIO(app, async_mode='eventlet')
 
 DB_FILE = 'chat.db'
+LOCK_FILE = 'lockstatus.txt'
 
 PASSWORD = "100005"
-is_locked = False  # Global site lock flag
+is_locked = False  # global variable, loaded from LOCK_FILE
+
+def load_lock_status():
+    global is_locked
+    if os.path.exists(LOCK_FILE):
+        with open(LOCK_FILE, 'r') as f:
+            val = f.read().strip()
+            is_locked = (val == 'locked')
+    else:
+        is_locked = False
+
+def save_lock_status():
+    with open(LOCK_FILE, 'w') as f:
+        f.write('locked' if is_locked else 'unlocked')
 
 def init_db():
     with sqlite3.connect(DB_FILE) as conn:
@@ -30,25 +44,25 @@ def init_db():
 def require_password_if_locked():
     global is_locked
 
-    # Allow /coverup without password check
-    if request.path == "/coverup" or request.path.startswith("/static/"):
+    # Allow /coverup and static files without password
+    if request.path == '/coverup' or request.path.startswith('/static/'):
         return
 
     if is_locked:
-        pw = request.args.get("password", "")
+        pw = request.args.get('password', '')
         if pw != PASSWORD:
-            # Return 401 Unauthorized if no or wrong password
-            abort(401, description="Unauthorized - Password required")
+            abort(401, description='Unauthorized - Password required')
 
-@app.route("/coverup", methods=["POST"])
+@app.route('/coverup', methods=['POST'])
 def toggle_lock():
     global is_locked
-    # Accept password in form or json body
-    password = request.form.get("password") or (request.json and request.json.get("password"))
+    # Accept password from form or JSON
+    password = request.form.get('password') or (request.json and request.json.get('password'))
     if password != PASSWORD:
-        abort(403, description="Wrong password")
+        abort(403, description='Wrong password')
 
     is_locked = not is_locked
+    save_lock_status()
     status = "LOCKED" if is_locked else "UNLOCKED"
     return jsonify({"message": f"Site is now {status}"}), 200
 
@@ -57,7 +71,7 @@ def index():
     with sqlite3.connect(DB_FILE) as conn:
         c = conn.cursor()
         c.execute("SELECT id, username, message FROM messages ORDER BY id DESC LIMIT 50")
-        messages = c.fetchall()[::-1]  # Reverse to show oldest first
+        messages = c.fetchall()[::-1]  # oldest first
     return render_template('index.html', messages=messages)
 
 @socketio.on('send_message')
@@ -101,5 +115,6 @@ def handle_delete_messages(data):
         print("Error in delete_messages:", e)
 
 if __name__ == '__main__':
+    load_lock_status()
     init_db()
     socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
