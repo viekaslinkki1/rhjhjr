@@ -53,18 +53,24 @@ def require_password_if_locked():
         if pw != PASSWORD:
             abort(401, description='Unauthorized - Password required')
 
-@app.route('/coverup', methods=['POST'])
-def toggle_lock():
+@app.route('/coverup', methods=['GET', 'POST'])
+def coverup():
     global is_locked
-    # Accept password from form or JSON
-    password = request.form.get('password') or (request.json and request.json.get('password'))
-    if password != PASSWORD:
-        abort(403, description='Wrong password')
 
+    if request.method == 'GET':
+        return render_template('coverup.html')
+
+    # POST: check password from form
+    password = request.form.get('password', '')
+    if password != PASSWORD:
+        return render_template('coverup.html', error='Wrong password, try again.')
+
+    # toggle lock state
     is_locked = not is_locked
     save_lock_status()
     status = "LOCKED" if is_locked else "UNLOCKED"
-    return jsonify({"message": f"Site is now {status}"}), 200
+
+    return render_template('coverup_result.html', status=status)
 
 @app.route('/')
 def index():
